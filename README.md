@@ -24,6 +24,20 @@ If the IDE is running while the script executes:
 
 ---
 
+## 🛡️ Keamanan & Backup Otomatis / Safety & Automatic Backup
+
+[Indonesian]
+Script ini memiliki fitur keselamatan ganda:
+1. **Pencadangan Database:** Sebelum memodifikasi database, script secara otomatis membuat duplikat file database asli dengan nama `state.vscdb.backup` di folder yang sama. Jika ada kendala, Anda tinggal mengganti nama file tersebut kembali ke `state.vscdb`.
+2. **Tanpa Penghapusan:** Script tidak pernah memodifikasi atau menghapus file `.pb` chat asli Anda.
+
+[English]
+This script features double-safety protection:
+1. **Database Backup:** Before making any modifications, the script automatically copies your active database file to `state.vscdb.backup` in the same directory. If any issues occur, you can restore your original state simply by renaming that backup file back to `state.vscdb`.
+2. **No Deletion:** The script never modifies or deletes your original `.pb` conversation files.
+
+---
+
 ## Cara Menjalankan / How to Run
 
 ### 1. Tutup Antigravity IDE / Exit the IDE
@@ -31,7 +45,7 @@ If the IDE is running while the script executes:
 * **Windows/Linux:** Pilih `File > Exit` atau tutup jendela aplikasi sepenuhnya.
 
 ### 2. Jalankan Script / Run the Script
-Buka Terminal (macOS/Linux) atau Command Prompt / PowerShell (Windows), lalu jalankan perintah berikut:
+Buka Terminal (macOS/Linux) or Command Prompt / PowerShell (Windows), lalu jalankan perintah berikut:
 
 ```bash
 python3 restore_antigravity_2.0.py
@@ -41,8 +55,9 @@ python3 restore_antigravity_2.0.py
 Setelah sukses dijalankan, script akan menampilkan:
 ```text
 Found X conversations on disk for Antigravity 2.0
+💾 Database file successfully backed up to: .../state.vscdb.backup
 Building final index...
-Backup saved to: trajectorySummaries_backup_2.0.txt
+Backup of trajectorySummaries value saved to: trajectorySummaries_backup_2.0.txt
 
 ==========================================================
 SUCCESS! Rebuilt index with X conversations.
@@ -64,8 +79,3 @@ Script ini secara otomatis mendeteksi path berikut berdasarkan sistem operasi An
 * **Linux:**
   * DB: `~/.config/Antigravity IDE/User/globalStorage/state.vscdb`
   * Chats: `~/.gemini/antigravity-ide/conversations`
-
----
-
-## Keamanan Data / Data Safety
-Script ini **tidak menghapus file chat asli Anda** (`.pb` files). Script ini juga secara otomatis membuat file cadangan (backup) indeks database lama Anda dengan nama `trajectorySummaries_backup_2.0.txt` di folder tempat Anda menjalankan script ini.

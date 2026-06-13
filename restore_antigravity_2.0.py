@@ -1,8 +1,9 @@
 """
-Antigravity 2.0 Chat Restorer (v2.1)
+Antigravity 2.0 Chat Restorer (v2.2)
 =====================================
 Rebuilds the Antigravity conversation index.
 Auto-detects paths for any OS and any user.
+Includes automatic database file backup.
 """
 
 import sqlite3
@@ -14,6 +15,7 @@ import sys
 import time
 import platform
 import subprocess
+import shutil
 from urllib.parse import quote, unquote
 
 _SYSTEM = platform.system()
@@ -514,6 +516,18 @@ def main():
     conversation_ids = [f[:-3] for f in conv_files]
     print(f"Found {len(conversation_ids)} conversations on disk.")
 
+    # ─── BACKUP THE DATABASE FILE FIRST ───
+    db_backup_path = DB_PATH + ".backup"
+    try:
+        shutil.copy2(DB_PATH, db_backup_path)
+        print(f"💾 Database file successfully backed up to:")
+        print(f"   {db_backup_path}")
+    except Exception as e:
+        print(f"⚠️ WARNING: Could not back up database file: {e}")
+        choice = input("Do you want to continue without a database backup? (y/n): ")
+        if choice.strip().lower() != 'y':
+            return 1
+
     existing_titles, existing_inner_blobs = extract_existing_metadata(DB_PATH)
     known_ws_uris = load_known_workspace_uris()
 
@@ -556,11 +570,12 @@ def main():
     cur.execute("SELECT value FROM ItemTable WHERE key='antigravityUnifiedStateSync.trajectorySummaries'")
     row = cur.fetchone()
 
+    # Save backup of the key-value representation
     backup_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), BACKUP_FILENAME)
     if row and row[0]:
         with open(backup_path, 'w', encoding='utf-8') as f:
             f.write(row[0])
-        print(f"Backup saved to: {BACKUP_FILENAME}")
+        print(f"Backup of trajectorySummaries value saved to: {BACKUP_FILENAME}")
 
     encoded = base64.b64encode(result_bytes).decode('utf-8')
     if row:
