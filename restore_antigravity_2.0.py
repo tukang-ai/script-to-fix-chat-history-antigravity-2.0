@@ -429,7 +429,9 @@ def resolve_title(conversation_id, existing_titles):
     brain_title = get_title_from_brain(conversation_id)
     if brain_title:
         return brain_title, "brain"
-    conv_file = os.path.join(CONVERSATIONS_DIR, f"{conversation_id}.pb")
+    pb_file = os.path.join(CONVERSATIONS_DIR, f"{conversation_id}.pb")
+    db_file = os.path.join(CONVERSATIONS_DIR, f"{conversation_id}.db")
+    conv_file = pb_file if os.path.exists(pb_file) else db_file
     if os.path.exists(conv_file):
         mod_time = time.strftime("%b %d", time.localtime(os.path.getmtime(conv_file)))
         return f"Conversation ({mod_time}) {conversation_id[:8]}", "fallback"
@@ -507,7 +509,7 @@ def main():
         print(f"ERROR: Conversations directory not found at: {CONVERSATIONS_DIR}")
         return 1
 
-    conv_files = [f for f in os.listdir(CONVERSATIONS_DIR) if f.endswith('.pb')]
+    conv_files = [f for f in os.listdir(CONVERSATIONS_DIR) if f.endswith(('.pb', '.db'))]
     if not conv_files:
         print("No conversations found in directory. Nothing to restore.")
         return 0
@@ -555,7 +557,9 @@ def main():
     for cid, title, source, inner_data, has_ws in resolved:
         ws_path = ws_assignments.get(cid)
         pb_path = os.path.join(CONVERSATIONS_DIR, f"{cid}.pb")
-        pb_mtime = os.path.getmtime(pb_path) if os.path.exists(pb_path) else None
+        db_path = os.path.join(CONVERSATIONS_DIR, f"{cid}.db")
+        target_path = pb_path if os.path.exists(pb_path) else db_path
+        pb_mtime = os.path.getmtime(target_path) if os.path.exists(target_path) else None
 
         entry = build_trajectory_entry(cid, title, inner_data, ws_path, pb_mtime)
         result_bytes += encode_length_delimited(1, entry)
