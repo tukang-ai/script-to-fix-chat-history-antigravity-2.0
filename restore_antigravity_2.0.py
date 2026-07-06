@@ -1,9 +1,7 @@
 """
-Antigravity 2.0 Chat Restorer (v2.2)
-=====================================
-Rebuilds the Antigravity conversation index.
-Auto-detects paths for any OS and any user.
-Includes automatic database file backup.
+Antigravity 2.0 Chat Restorer
+=============================
+Rebuilds the Antigravity IDE (2.0) conversation index.
 """
 
 import sqlite3
@@ -13,84 +11,12 @@ import os
 import re
 import sys
 import time
-import platform
-import subprocess
-import shutil
 from urllib.parse import quote, unquote
 
-_SYSTEM = platform.system()
-
-def find_paths():
-    """
-    Dynamically searches for the correct database and conversations directories
-    across Windows, macOS, and Linux, supporting both old and new app versions.
-    """
-    _home = os.path.expanduser("~")
-    
-    # 1. Search for application data root directory
-    app_data_roots = []
-    if _SYSTEM == "Windows":
-        appdata = os.environ.get("APPDATA")
-        if appdata:
-            app_data_roots.append(appdata)
-    elif _SYSTEM == "Darwin":
-        app_data_roots.append(os.path.join(_home, "Library", "Application Support"))
-    else:
-        app_data_roots.append(os.path.join(_home, ".config"))
-        
-    # List of possible IDE app folder names (version 2.0 and older versions)
-    app_names = ["Antigravity IDE", "antigravity-ide", "Antigravity", "antigravity"]
-    
-    db_path = None
-    workspace_storage_dir = None
-    
-    # Attempt to locate existing state database
-    for root in app_data_roots:
-        for name in app_names:
-            test_db = os.path.join(root, name, "User", "globalStorage", "state.vscdb")
-            if os.path.exists(test_db):
-                db_path = test_db
-                workspace_storage_dir = os.path.join(root, name, "User", "workspaceStorage")
-                break
-        if db_path:
-            break
-            
-    # Fallback to standard defaults if no active DB is found
-    if not db_path:
-        default_name = "Antigravity IDE"
-        if _SYSTEM == "Windows":
-            db_path = os.path.expandvars(r"%APPDATA%\Antigravity IDE\User\globalStorage\state.vscdb")
-            workspace_storage_dir = os.path.expandvars(r"%APPDATA%\Antigravity IDE\User\workspaceStorage")
-        elif _SYSTEM == "Darwin":
-            db_path = os.path.join(_home, "Library", "Application Support", "Antigravity IDE", "User", "globalStorage", "state.vscdb")
-            workspace_storage_dir = os.path.join(_home, "Library", "Application Support", "Antigravity IDE", "User", "workspaceStorage")
-        else:
-            db_path = os.path.join(_home, ".config", "Antigravity IDE", "User", "globalStorage", "state.vscdb")
-            workspace_storage_dir = os.path.join(_home, ".config", "Antigravity IDE", "User", "workspaceStorage")
-
-    # 2. Search for the local Gemini storage folder containing conversations
-    gemini_root = os.path.join(_home, ".gemini")
-    gemini_names = ["antigravity-ide", "antigravity"]
-    conversations_dir = None
-    brain_dir = None
-    
-    for name in gemini_names:
-        test_conv = os.path.join(gemini_root, name, "conversations")
-        if os.path.isdir(test_conv):
-            conversations_dir = test_conv
-            brain_dir = os.path.join(gemini_root, name, "brain")
-            break
-            
-    # Fallback if not found
-    if not conversations_dir:
-        conversations_dir = os.path.join(gemini_root, "antigravity-ide", "conversations")
-        brain_dir = os.path.join(gemini_root, "antigravity-ide", "brain")
-        
-    return db_path, conversations_dir, brain_dir, workspace_storage_dir
-
-# ─── Load Path Settings ──────────────────────────────────────────────────────
-
-DB_PATH, CONVERSATIONS_DIR, BRAIN_DIR, WORKSPACE_STORAGE_DIR = find_paths()
+DB_PATH = "/Users/macmini/Library/Application Support/Antigravity IDE/User/globalStorage/state.vscdb"
+CONVERSATIONS_DIR = "/Users/macmini/.gemini/antigravity-ide/conversations"
+BRAIN_DIR = "/Users/macmini/.gemini/antigravity-ide/brain"
+WORKSPACE_STORAGE_DIR = "/Users/macmini/Library/Application Support/Antigravity IDE/User/workspaceStorage"
 BACKUP_FILENAME = "trajectorySummaries_backup_2.0.txt"
 
 # ─── Protobuf Varint Helpers ─────────────────────────────────────────────────
@@ -429,12 +355,17 @@ def resolve_title(conversation_id, existing_titles):
     brain_title = get_title_from_brain(conversation_id)
     if brain_title:
         return brain_title, "brain"
-    pb_file = os.path.join(CONVERSATIONS_DIR, f"{conversation_id}.pb")
-    db_file = os.path.join(CONVERSATIONS_DIR, f"{conversation_id}.db")
-    conv_file = pb_file if os.path.exists(pb_file) else db_file
-    if os.path.exists(conv_file):
-        mod_time = time.strftime("%b %d", time.localtime(os.path.getmtime(conv_file)))
+    
+    conv_file_pb = os.path.join(CONVERSATIONS_DIR, f"{conversation_id}.pb")
+    conv_file_db = os.path.join(CONVERSATIONS_DIR, f"{conversation_id}.db")
+    
+    if os.path.exists(conv_file_pb):
+        mod_time = time.strftime("%b %d", time.localtime(os.path.getmtime(conv_file_pb)))
         return f"Conversation ({mod_time}) {conversation_id[:8]}", "fallback"
+    elif os.path.exists(conv_file_db):
+        mod_time = time.strftime("%b %d", time.localtime(os.path.getmtime(conv_file_db)))
+        return f"Conversation ({mod_time}) {conversation_id[:8]}", "fallback"
+        
     return f"Conversation {conversation_id[:8]}", "fallback"
 
 def build_trajectory_entry(conversation_id, title, existing_inner_data=None,
@@ -466,41 +397,6 @@ def main():
     print("   Rebuilds index for Antigravity IDE (2.0)")
     print("=" * 62)
     print()
-    
-    print(f"Detecting paths...")
-    print(f"  System OS:         {_SYSTEM}")
-    print(f"  Database Path:     {DB_PATH}")
-    print(f"  Conversations Dir: {CONVERSATIONS_DIR}")
-    print(f"  Brain Dir:         {BRAIN_DIR}")
-    print(f"  Workspace Storage: {WORKSPACE_STORAGE_DIR}")
-    print()
-
-    # Verify if IDE is currently running
-    if _SYSTEM == "Darwin":
-        try:
-            result = subprocess.run(['pgrep', '-f', 'Antigravity IDE'], capture_output=True, text=True)
-            if result.stdout.strip():
-                print("⚠️ WARNING: Antigravity IDE is still running!")
-                print("Close the application COMPLETELY before running this script.")
-                print("Otherwise, the IDE will overwrite your restored history on exit.")
-                print()
-                choice = input("Press Enter to continue anyway, or type Q to quit: ")
-                if choice.strip().lower() == 'q':
-                    return 1
-        except Exception:
-            pass
-    elif _SYSTEM == "Windows":
-        try:
-            result = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq Antigravity IDE.exe'], capture_output=True, text=True, creationflags=0x08000000)
-            if 'antigravity' in result.stdout.lower():
-                print("⚠️ WARNING: Antigravity IDE is still running!")
-                print("Close the application COMPLETELY before running this script.")
-                print()
-                choice = input("Press Enter to continue anyway, or type Q to quit: ")
-                if choice.strip().lower() == 'q':
-                    return 1
-        except Exception:
-            pass
 
     if not os.path.exists(DB_PATH):
         print(f"ERROR: Database not found at: {DB_PATH}")
@@ -509,26 +405,23 @@ def main():
         print(f"ERROR: Conversations directory not found at: {CONVERSATIONS_DIR}")
         return 1
 
-    conv_files = [f for f in os.listdir(CONVERSATIONS_DIR) if f.endswith(('.pb', '.db'))]
+    valid_exts = ('.pb', '.db')
+    conv_files = [f for f in os.listdir(CONVERSATIONS_DIR) if f.endswith(valid_exts)]
     if not conv_files:
-        print("No conversations found in directory. Nothing to restore.")
+        print("No conversations found in 2.0 directory. Nothing to restore.")
         return 0
 
     conv_files.sort(key=lambda f: os.path.getmtime(os.path.join(CONVERSATIONS_DIR, f)), reverse=True)
-    conversation_ids = [f[:-3] for f in conv_files]
-    print(f"Found {len(conversation_ids)} conversations on disk.")
-
-    # ─── BACKUP THE DATABASE FILE FIRST ───
-    db_backup_path = DB_PATH + ".backup"
-    try:
-        shutil.copy2(DB_PATH, db_backup_path)
-        print(f"💾 Database file successfully backed up to:")
-        print(f"   {db_backup_path}")
-    except Exception as e:
-        print(f"⚠️ WARNING: Could not back up database file: {e}")
-        choice = input("Do you want to continue without a database backup? (y/n): ")
-        if choice.strip().lower() != 'y':
-            return 1
+    
+    conversation_ids = []
+    seen = set()
+    for f in conv_files:
+        cid = f[:-3]
+        if cid not in seen:
+            seen.add(cid)
+            conversation_ids.append(cid)
+            
+    print(f"Found {len(conversation_ids)} conversations on disk for Antigravity 2.0")
 
     existing_titles, existing_inner_blobs = extract_existing_metadata(DB_PATH)
     known_ws_uris = load_known_workspace_uris()
@@ -558,15 +451,19 @@ def main():
         ws_path = ws_assignments.get(cid)
         pb_path = os.path.join(CONVERSATIONS_DIR, f"{cid}.pb")
         db_path = os.path.join(CONVERSATIONS_DIR, f"{cid}.db")
-        target_path = pb_path if os.path.exists(pb_path) else db_path
-        pb_mtime = os.path.getmtime(target_path) if os.path.exists(target_path) else None
+        
+        file_mtime = None
+        if os.path.exists(pb_path):
+            file_mtime = os.path.getmtime(pb_path)
+        elif os.path.exists(db_path):
+            file_mtime = os.path.getmtime(db_path)
 
-        entry = build_trajectory_entry(cid, title, inner_data, ws_path, pb_mtime)
+        entry = build_trajectory_entry(cid, title, inner_data, ws_path, file_mtime)
         result_bytes += encode_length_delimited(1, entry)
 
         if has_ws or ws_path:
             ws_total += 1
-        if pb_mtime and (not inner_data or not has_timestamp_fields(inner_data)):
+        if file_mtime and (not inner_data or not has_timestamp_fields(inner_data)):
             ts_injected += 1
 
     conn = sqlite3.connect(DB_PATH)
@@ -574,12 +471,11 @@ def main():
     cur.execute("SELECT value FROM ItemTable WHERE key='antigravityUnifiedStateSync.trajectorySummaries'")
     row = cur.fetchone()
 
-    # Save backup of the key-value representation
     backup_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), BACKUP_FILENAME)
     if row and row[0]:
         with open(backup_path, 'w', encoding='utf-8') as f:
             f.write(row[0])
-        print(f"Backup of trajectorySummaries value saved to: {BACKUP_FILENAME}")
+        print(f"Backup saved to: {BACKUP_FILENAME}")
 
     encoded = base64.b64encode(result_bytes).decode('utf-8')
     if row:
